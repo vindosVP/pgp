@@ -1,15 +1,7 @@
 #include <iostream>
-#include <iomanip>
+#include <chrono>
 
 using namespace std;
-
-#define HANDLE_ERROR(err)                             \
-    do {                                              \
-        if (err != cudaSuccess) {                     \
-            printf("ERROR: %s\n", cudaGetErrorString(err)); \
-            exit(0);                                  \
-        }                                             \
-    } while (0)
 
 __global__ void kernel(double *res, double *arr1, double *arr2, int n) {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;			// Абсолютный номер потока
@@ -19,50 +11,56 @@ __global__ void kernel(double *res, double *arr1, double *arr2, int n) {
     }
 }
 
-int main()
-{
-    std::ios_base::sync_with_stdio(false);
-
-    int size = 0;
-    std::cin >> size;
-
-    double *vec1 = new double[size];
-    double *vec2 = new double[size];
-    double *res = new double[size];
-
-    for (int i = 0; i < size; ++i) {
-        std::cin >> vec1[i];
+int main() {
+    int size;
+    scanf("%d", &size);
+    double *res = (double *)malloc(sizeof(double) * size);
+    double *vec1 = (double *)malloc(sizeof(double) * size);
+    double *vec2 = (double *)malloc(sizeof(double) * size);
+    for(int i = 0; i < size; i++) {
+        scanf("%lf", &vec1[i]);
     }
-    for (int i = 0; i < size; ++i) {
-        std::cin >> vec2[i];
+    for(int i = 0; i < size; i++) {
+        scanf("%lf", &vec2[i]);
     }
 
-    double *dev1, *dev2, *devRes;
+    double *devRes, *devVec1, *devVec2;
+    cudaMalloc(&devRes, sizeof(double) * n);
+    cudaMemcpy(devRes, res, sizeof(double) * n, cudaMemcpyHostToDevice);
 
-    HANDLE_ERROR(cudaMalloc((void **) &dev1, sizeof(double) * size));
-    HANDLE_ERROR(cudaMalloc((void **) &dev2, sizeof(double) * size));
-    HANDLE_ERROR(cudaMalloc((void **) &devRes, sizeof(double) * size));
+    cudaMalloc(&devVec1, sizeof(double) * n);
+    cudaMemcpy(devVec1, vec1, sizeof(double) * n, cudaMemcpyHostToDevice);
 
-    HANDLE_ERROR(cudaMemcpy(dev1, vec1, sizeof(double) * size, cudaMemcpyHostToDevice));
-    HANDLE_ERROR(cudaMemcpy(dev2, vec2, sizeof(double) * size, cudaMemcpyHostToDevice));
+    cudaMalloc(&devVec2, sizeof(double) * n);
+    cudaMemcpy(devVec2, vec2, sizeof(double) * n, cudaMemcpyHostToDevice);
 
-    kernel<<<256, 256>>>(dev1, dev2, devRes, size);
-    HANDLE_ERROR(cudaGetLastError());
 
-    HANDLE_ERROR(cudaMemcpy(res, devRes, sizeof(double) * size, cudaMemcpyDeviceToHost));
+    cudaEvent_t start, stop;
+    float time;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
 
-    std::cout.precision(10);
-    std::cout.setf(std::ios::scientific);
-    for (int i = 0; i < size; ++i) {
-        std::cout << res[i] << ' ';
-    }
-    std::cout << '\n';
+    kernel<<<256, 256>>>(devRes, devVec1, devVec2, n);
 
-    HANDLE_ERROR(cudaFree(dev1));
-    HANDLE_ERROR(cudaFree(dev2));
-    HANDLE_ERROR(cudaFree(devRes));
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    fprintf(stderr, "time = %f\n", time);
+    cudaEventDestroy(stop);
+    cudaEventDestroy(start);
 
-    delete[] vec1;
-    delete[] vec2;
-    delete[] res;
+
+    // cudaMemcpy(res, devRes, sizeof(double) * n, cudaMemcpyDeviceToHost);
+    cudaFree(devRes);
+    cudaFree(devVec1);
+    cudaFree(devVec2);
+//    for(int i = 0; i < n; i++) {
+//        printf("%f ", res[i]);
+//    }
+    printf("\n");
+    free(res);
+    free(vec1);
+    free(vec2);
+    return 0;
 }
