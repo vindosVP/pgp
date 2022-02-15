@@ -6,8 +6,9 @@ using namespace std;
 __global__ void kernel(double *arr1, double *arr2, int size) {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;			// Абсолютный номер потока
     int offset = blockDim.x * gridDim.x;						// Общее кол-во потоков
-    for(int i = idx; i < size; i += offset) {
+    while (idx < size) {
         arr1[i] = arr1[i] * arr2[i];
+        idx += offset;
     }
 }
 
