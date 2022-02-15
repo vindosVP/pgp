@@ -7,7 +7,7 @@ __global__ void kernel(double *arr1, double *arr2, int size) {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;			// Абсолютный номер потока
     int offset = blockDim.x * gridDim.x;						// Общее кол-во потоков
     while (idx < size) {
-        arr1[i] = arr1[i] * arr2[i];
+        arr1[idx] = arr1[idx] * arr2[idx];
         idx += offset;
     }
 }
