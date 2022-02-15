@@ -25,14 +25,14 @@ int main() {
     }
 
     double *devRes, *devVec1, *devVec2;
-    cudaMalloc(&devRes, sizeof(double) * n);
-    cudaMemcpy(devRes, res, sizeof(double) * n, cudaMemcpyHostToDevice);
+    cudaMalloc(&devRes, sizeof(double) * size);
+    cudaMemcpy(devRes, res, sizeof(double) * size, cudaMemcpyHostToDevice);
 
-    cudaMalloc(&devVec1, sizeof(double) * n);
-    cudaMemcpy(devVec1, vec1, sizeof(double) * n, cudaMemcpyHostToDevice);
+    cudaMalloc(&devVec1, sizeof(double) * size);
+    cudaMemcpy(devVec1, vec1, sizeof(double) * size, cudaMemcpyHostToDevice);
 
-    cudaMalloc(&devVec2, sizeof(double) * n);
-    cudaMemcpy(devVec2, vec2, sizeof(double) * n, cudaMemcpyHostToDevice);
+    cudaMalloc(&devVec2, sizeof(double) * size);
+    cudaMemcpy(devVec2, vec2, sizeof(double) * size, cudaMemcpyHostToDevice);
 
 
     cudaEvent_t start, stop;
@@ -41,7 +41,7 @@ int main() {
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
 
-    kernel<<<256, 256>>>(devRes, devVec1, devVec2, n);
+    kernel<<<256, 256>>>(devRes, devVec1, devVec2, size);
 
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
