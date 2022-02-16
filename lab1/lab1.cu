@@ -51,7 +51,7 @@ int main() {
 
     cudaMemcpy(vec1, devVec1, sizeof(double) * size, cudaMemcpyDeviceToHost);
     for(int i = 0; i < size; i++) {
-        printf("%f ", vec1[i]);
+        printf("%.10e ", vec1[i]);
     }
     printf("\n");
     cudaFree(devVec1);
