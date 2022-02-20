@@ -107,10 +107,10 @@ __global__ void kernel (double* matrix, double* identityMatrix, int size, thrust
             // swapLines(double* matrix, double* identityMatrix, int i, int j, int size)
 
             // Свапаем местами строки (если максимальный элемент стоит не на главной диагонали)
-            for (int k = idx; k < size; k += offset) {
+            for (int k = idx; k < size; k += offsetx) {
                 double tempMatrixValue = matrix[k * size + col];
                 matrix[k * size + col] = matrix[k * size + max_idx];
-                matrix[k * size + max_idx] = tempMatrix;
+                matrix[k * size + max_idx] = tempMatrixValue;
 
                 double tempIdentityMatrixValue = identityMatrix[k * size + col];
                 identityMatrix[k * size + col] = identityMatrix[k * size + max_idx];
@@ -201,7 +201,7 @@ int main() {
 //
 //    divideIdentityMatrix<<<block(32, 16), thread(32, 16)>>>(dev_matrix, dev_identityMatrix, size);
 
-    kernel<<<block(32, 16), thread(32, 16)>>>(dev_matrix, dev_identityMatrix, size, pointer);
+    kernel<<<dim3(32, 16), dim3(32, 16)>>>(dev_matrix, dev_identityMatrix, size, pointer);
 
     CSC(cudaMemcpy(matrix, dev_matrix, sizeof(double) * array_size, cudaMemcpyDeviceToHost));
     CSC(cudaMemcpy(identityMatrix, dev_identityMatrix, sizeof(double) * array_size, cudaMemcpyDeviceToHost));
