@@ -27,22 +27,21 @@ struct compare_value {
     }
 };
 
-__global__ void swapLines(double* matrix, double* identityMatrix, int col, int max_idx, int size) {
+__global__ void swap(double* matrix, double* identityMatrix, int col, int max_idx, int size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int offset = gridDim.x * blockDim.x;
 
-    for (int k = idx; k < size; k += offset) {
-        double tempMatrixValue = matrix[k * size + col];
-        matrix[k * size + col] = matrix[k * size + max_idx];
-        matrix[k * size + max_idx] = tempMatrixValue;
+    for (int i = idx; i < size; i += offset) {
+        double tempMatrixValue = matrix[col + i * size];
+        matrix[col + i * size] = matrix[max_idx + i * size];
+        matrix[max_idx + i * size] = tempMatrixValue;
 
-        double tempIdentityMatrixValue = identityMatrix[k * size + col];
-        identityMatrix[k * size + col] = identityMatrix[k * size + max_idx];
-        identityMatrix[k * size + max_idx] = tempIdentityMatrixValue;
+        double tempIdentityMatrixValue = identityMatrix[col + i * size];
+        identityMatrix[col + i * size] = identityMatrix[max_idx + i * size];
+        identityMatrix[max_idx + i * size] = tempIdentityMatrixValue;
     }
 }
-//
-//
+
 __global__ void nullifyDown(double* matrix, double* identityMatrix, int size, int col) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int idy = blockIdx.y * blockDim.y + threadIdx.y;
@@ -51,44 +50,17 @@ __global__ void nullifyDown(double* matrix, double* identityMatrix, int size, in
 
     for (int i = col + idx + 1; i < size; i += offsetx) {
         for (int j = col + idy + 1; j < size; j += offsety) {
-            matrix[j * size + i] = - matrix[col * size + i] / matrix[col * size + col]
-                                   * matrix[j * size + col] + matrix[j * size + i];
+            matrix[i + j * size] = - matrix[i + col * size] / matrix[col + col * size]
+                                   * matrix[col + j * size] + matrix[i + j * size];
         }
         for (int j = idy; j < size; j += offsety) {
-            identityMatrix[j * size + i] = - matrix[col * size + i] / matrix[col * size + col]
-                                           * identityMatrix[j * size + col] + identityMatrix[j * size + i];
+            identityMatrix[i + j * size] = - matrix[i + col * size] / matrix[col + col * size]
+                                           * identityMatrix[col +  j * size] + identityMatrix[i + j * size];
         }
     }
 }
-//
-//__global__ void nullifyUp(double* matrix, double* identityMatrix, int size, int x) {
-//    int idx = threadIdx.x + blockIdx.x * blockDim.x;
-//    int idy = threadIdx.y + blockIdx.y * blockDim.y;
-//    int offsetx = gridDim.x * blockDim.x;
-//    int offsety = gridDim.y * blockDim.y;
-//
-//    for (int i = x - idx - 1; i >= 0; i -= offsetx) {
-//        for (int j = idy; j < size; j += offsety) {
-//            identityMatrix[j * size + i] = - matrix[x * size + i] / matrix[x * size + x]
-//                                           * identityMatrix[j * size + x] + identityMatrix[j * size + i];
-//        }
-//    }
-//}
-//
-//__global__ void divideIdentityMatrix(double* matrix, double* identityMatrix, int size) {
-//    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-//    int idy = blockIdx.y * blockDim.y + threadIdx.y;
-//    int offsetx = gridDim.x * blockDim.x;
-//    int offsety = gridDim.y * blockDim.y;
-//
-//    for (int i = idx; i < size; i += offsetx) {
-//        for (int j = idy; j < size; j += offsety) {
-//            identityMatrix[j * size + i] /= matrix[i * size + i];
-//        }
-//    }
-//}
 
-__global__ void kernel(double* matrix, double* identityMatrix, int size, thrust::device_ptr<double> pointer) {
+__global__ void kernel(double* matrix, double* identityMatrix, int size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int idy = blockIdx.y * blockDim.y + threadIdx.y;
     int offsetx = gridDim.x * blockDim.x;
@@ -96,21 +68,18 @@ __global__ void kernel(double* matrix, double* identityMatrix, int size, thrust:
 
     for (int col = size - 1; col > 0; col--) {
         // Зануляем всё выше главной диагонали
-        // makeUpNull<<<block(32, 16), thread(32, 16)>>>(dev_matrix, dev_identityMatrix, size, i);
-        // nullifyUp(double* matrix, double* identityMatrix, int size, int x)
         for (int i = col - idx - 1; i >= 0; i -= offsetx) {
             for (int j = idy; j < size; j += offsety) {
-                identityMatrix[j * size + i] = - matrix[col * size + i] / matrix[col * size + col]
-                                               * identityMatrix[j * size + col] + identityMatrix[j * size + i];
+                identityMatrix[i + j * size] = - matrix[i + col * size] / matrix[col + col * size]
+                                               * identityMatrix[col + j * size] + identityMatrix[i + j * size];
             }
         }
     }
 
     // Делим строки присоединённой матрицы на соотв. элемент с главной диагонали главной матрицы
-    // divideIdentityMatrix<<<block(32, 16), thread(32, 16)>>>(dev_matrix, dev_identityMatrix, size);
     for (int i = idx; i < size; i += offsetx) {
         for (int j = idy; j < size; j += offsety) {
-            identityMatrix[j * size + i] /= matrix[i * size + i];
+            identityMatrix[i + j * size] /= matrix[i + i * size];
         }
     }
 }
@@ -119,10 +88,8 @@ __global__ void kernel(double* matrix, double* identityMatrix, int size, thrust:
 int main() {
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(NULL);
-
     int size;
     cin >> size;
-
     const int array_size = size * size;
 
     double *matrix = (double*)malloc( array_size * sizeof(double));
@@ -130,15 +97,15 @@ int main() {
 
     for (int i = 0; i < size; i++) {
         for (int j = 0; j < size; j++) {
-            cin >> matrix[j * size + i];
+            cin >> matrix[i + j * size];
         }
     }
 
     for (int i = 0; i < size; i++) {
         for (int j = 0; j < size; j++) {
             i != j
-                ? identityMatrix[i * size + j] = 0.0
-                : identityMatrix[i * size + j] = 1.0;
+                ? identityMatrix[j + i * size] = 0.0
+                : identityMatrix[j + i * size] = 1.0;
         }
     }
 
@@ -148,31 +115,22 @@ int main() {
     CSC(cudaMalloc(&dev_identityMatrix, sizeof(double) * array_size));
     CSC(cudaMemcpy(dev_matrix, matrix, sizeof(double) * array_size, cudaMemcpyHostToDevice));
     CSC(cudaMemcpy(dev_identityMatrix, identityMatrix, sizeof(double) * array_size, cudaMemcpyHostToDevice));
+
     const thrust::device_ptr<double> pointer = thrust::device_pointer_cast(dev_matrix);
 
-//    for (int i = 0; i < size - 1; i++) {
-//        const int max_idx = thrust::max_element(pointer + i * size + i, pointer + (i + 1) * size, comparator) - pointer - i * size;
-//        if (max_idx != i) swapLines<<<256, 256>>>(dev_matrix, dev_identityMatrix, i, max_idx, size);
-//        makeDownNull<<<block(32, 16), thread(32, 16)>>>(dev_matrix, dev_identityMatrix, size, i);
-//    }
-//
-//    for (int i = size - 1; i > 0; i--) {
-//        makeUpNull<<<block(32, 16), thread(32, 16)>>>(dev_matrix, dev_identityMatrix, size, i);
-//    }
-//
-//    divideIdentityMatrix<<<block(32, 16), thread(32, 16)>>>(dev_matrix, dev_identityMatrix, size);
-
     for (int col = 0; col < size - 1; col++) {
-        const int max_idx = thrust::max_element(pointer + col * size + col, pointer + (col + 1) * size, compare_value())
-                            - pointer - col * size;
+        const int max_idx = thrust::max_element(pointer + col + col * size, pointer + (col + 1) * size, compare_value())
+                            - col * size - pointer;
         if (max_idx != col) {
             // Свапаем местами строки (если максимальный элемент стоит не на главной диагонали)
-            swapLines<<<32, 32>>>(dev_matrix, dev_identityMatrix, col, max_idx, size);
+            swap<<<32, 32>>>(dev_matrix, dev_identityMatrix, col, max_idx, size);
         }
         // Зануляем элементы ниже главного
         nullifyDown<<<dim3(32, 16), dim3(32, 16)>>>(dev_matrix, dev_identityMatrix, size, col);
     }
 
+    // Зануляем всё выше главной диагонали
+    // и делим строки присоединённой матрицы на соотв. элемент с главной диагонали левой матрицы
     kernel<<<dim3(32, 16), dim3(32, 16)>>>(dev_matrix, dev_identityMatrix, size, pointer);
 
     CSC(cudaMemcpy(matrix, dev_matrix, sizeof(double) * array_size, cudaMemcpyDeviceToHost));
@@ -187,8 +145,8 @@ int main() {
         cout << '\n';
     }
 
-    cudaFree(dev_matrix);
-    cudaFree(dev_identityMatrix);
+    CSC(cudaFree(dev_matrix));
+    CSC(cudaFree(dev_identityMatrix));
     delete[] matrix;
     delete[] identityMatrix;
 
