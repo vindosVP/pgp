@@ -21,14 +21,11 @@ do {																\
 	}																\
 } while(0)
 
-class Comparator{
-public:
-    __device__ __host__ bool operator() (const double& first, const double& second) const {
+struct compare_value {
+    __device__ __host__ bool operator() (const double lhs, const double rhs) {
         return fabs(first) < fabs(second);
     }
 };
-
-const Comparator comparator;
 
 //__global__ void swapLines(double* matrix, double* identityMatrix, int i, int j, int size) {
 //    int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -92,16 +89,19 @@ const Comparator comparator;
 //    }
 //}
 
+__device__ __host__ findMaxElement(double* matrix, thrust::device_ptr<double> pointer, int idx, int size) {
+    return thrust::max_element(pointer + idx * size + idx, pointer + (idx + 1) * size, compare_value())
+           - pointer - idx * size;
+}
 
-__global__ void kernel (double* matrix, double* identityMatrix, int size, thrust::device_ptr<double> pointer) {
+__global__ void kernel(double* matrix, double* identityMatrix, int size, thrust::device_ptr<double> pointer) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int idy = blockIdx.y * blockDim.y + threadIdx.y;
     int offsetx = gridDim.x * blockDim.x;
     int offsety = gridDim.y * blockDim.y;
 
     for (int col = 0; col < size - 1; col++) {
-        const int max_idx = thrust::max_element(pointer + col * size + col, pointer + (col + 1) * size, comparator)
-                            - pointer - col * size;
+        const int max_idx = findMaxElement(matrix, pointer, col, size);
         if (max_idx != idx){
             // swapLines<<<256, 256>>>(dev_matrix, dev_identityMatrix, i, max_idx, size);
             // swapLines(double* matrix, double* identityMatrix, int i, int j, int size)
