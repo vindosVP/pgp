@@ -110,8 +110,8 @@ int main() {
     }
 
     int i, j;
-    double *matrix = (double*) malloc( n * n * sizeof(double) );
-    double *identity = (double*) malloc( n * n * sizeof(double) );
+    double *matrix = (double*)malloc( n * n * sizeof(double));
+    double *identity = (double*)malloc( n * n * sizeof(double));
 
     for (i = 0; i < n; ++i) {
         for (j = 0; j < n; ++j) {
@@ -129,10 +129,10 @@ int main() {
 
 
 
-    double* dev_matrix;
-    double* dev_identity;
-    cudaMalloc(&dev_matrix, sizeof(double) * n * n);
-    cudaMalloc(&dev_identity, sizeof(double) * n * n);
+    double* dev_matrix = 0;
+    double* dev_identity = 0;
+    CSC(cudaMalloc(&dev_matrix, sizeof(double) * n * n));
+    CSC(cudaMalloc(&dev_identity, sizeof(double) * n * n));
     cudaMemcpy(dev_matrix, matrix, sizeof(double) * n * n, cudaMemcpyHostToDevice);
     cudaMemcpy(dev_identity, identity, sizeof(double) * n * n, cudaMemcpyHostToDevice);
     const thrust::device_ptr<double> ptr = thrust::device_pointer_cast(dev_matrix);
