@@ -98,7 +98,7 @@ __global__ void kernel(double* matrix, double* identityMatrix, int size, thrust:
         // Зануляем всё выше главной диагонали
         // makeUpNull<<<block(32, 16), thread(32, 16)>>>(dev_matrix, dev_identityMatrix, size, i);
         // nullifyUp(double* matrix, double* identityMatrix, int size, int x)
-        for (int i = col - idx - 1; col >= 0; col -= offsetx) {
+        for (int i = col - idx - 1; i >= 0; i -= offsetx) {
             for (int j = idy; j < size; j += offsety) {
                 identityMatrix[j * size + i] = - matrix[col * size + i] / matrix[col * size + col]
                                                * identityMatrix[j * size + col] + identityMatrix[j * size + i];
