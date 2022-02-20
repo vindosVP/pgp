@@ -27,11 +27,11 @@ struct compare_value {
     }
 };
 
-__global__ void swapLines(double* matrix, double* identityMatrix, int i, int j, int size) {
+__global__ void swapLines(double* matrix, double* identityMatrix, int col, int max_idx, int size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int offset = gridDim.x * blockDim.x;
 
-    for (int k = idx; k < size; k += offsetx) {
+    for (int k = idx; k < size; k += offset) {
         double tempMatrixValue = matrix[k * size + col];
         matrix[k * size + col] = matrix[k * size + max_idx];
         matrix[k * size + max_idx] = tempMatrixValue;
@@ -163,8 +163,8 @@ int main() {
 //    divideIdentityMatrix<<<block(32, 16), thread(32, 16)>>>(dev_matrix, dev_identityMatrix, size);
 
     for (int col = 0; col < size - 1; col++) {
-        const int max_idx = thrust::max_element(pointer + idx * size + idx, pointer + (idx + 1) * size, compare_value())
-                            - pointer - idx * size;;
+        const int max_idx = thrust::max_element(pointer + col * size + col, pointer + (col + 1) * size, compare_value())
+                            - pointer - col * size;
         if (max_idx != col) {
             // Свапаем местами строки (если максимальный элемент стоит не на главной диагонали)
             swapLines<<<32, 32>>>(dev_matrix, dev_identityMatrix, col, max_idx, size);
