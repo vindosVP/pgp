@@ -23,7 +23,7 @@ do {																\
 
 struct compare_value {
     __device__ __host__ bool operator() (const double lhs, const double rhs) {
-        return fabs(first) < fabs(second);
+        return fabs(lhs) < fabs(rhs);
     }
 };
 
@@ -89,7 +89,7 @@ struct compare_value {
 //    }
 //}
 
-__device__ __host__ findMaxElement(double* matrix, thrust::device_ptr<double> pointer, int idx, int size) {
+__global__ int findMaxElement(double* matrix, thrust::device_ptr<double> pointer, int idx, int size) {
     return thrust::max_element(pointer + idx * size + idx, pointer + (idx + 1) * size, compare_value())
            - pointer - idx * size;
 }
