@@ -131,7 +131,7 @@ int main() {
 
     // Зануляем всё выше главной диагонали
     // и делим строки присоединённой матрицы на соотв. элемент с главной диагонали левой матрицы
-    kernel<<<dim3(32, 16), dim3(32, 16)>>>(dev_matrix, dev_identityMatrix, size, pointer);
+    kernel<<<dim3(32, 16), dim3(32, 16)>>>(dev_matrix, dev_identityMatrix, size);
 
     CSC(cudaMemcpy(matrix, dev_matrix, sizeof(double) * array_size, cudaMemcpyDeviceToHost));
     CSC(cudaMemcpy(identityMatrix, dev_identityMatrix, sizeof(double) * array_size, cudaMemcpyDeviceToHost));
