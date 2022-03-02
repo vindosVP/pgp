@@ -86,19 +86,27 @@ __global__ void kernel(double* matrix, double* identityMatrix, int size) {
 
 
 int main() {
-    std::ios_base::sync_with_stdio(false);
-    std::cin.tie(NULL);
     int size;
     cin >> size;
-    const int array_size = size * size;
+    if (size == 0) return 0;
+    const int array_size = size * (size + 1);
 
-    double *matrix = (double*)malloc( array_size * sizeof(double));
-    double *identityMatrix = (double*)malloc( array_size * sizeof(double));
+    double *matrix = (double*)malloc(array_size * sizeof(double));
+    double *identityMatrix = (double*)malloc(array_size * sizeof(double));
+
+    bool isNull = false;
 
     for (int i = 0; i < size; i++) {
         for (int j = 0; j < size; j++) {
             cin >> matrix[i + j * size];
+            if (matrix[i + j * size] == 0) {
+                isNull = true;
+            }
         }
+    }
+
+    if (isNull) {
+        return 0;
     }
 
     for (int i = 0; i < size; i++) {
@@ -109,8 +117,8 @@ int main() {
         }
     }
 
-    double* dev_matrix = 0;
-    double* dev_identityMatrix = 0;
+    double* dev_matrix;
+    double* dev_identityMatrix;
     CSC(cudaMalloc(&dev_matrix, sizeof(double) * array_size));
     CSC(cudaMalloc(&dev_identityMatrix, sizeof(double) * array_size));
     CSC(cudaMemcpy(dev_matrix, matrix, sizeof(double) * array_size, cudaMemcpyHostToDevice));
@@ -123,7 +131,7 @@ int main() {
                             - col * size - pointer;
         if (max_idx != col) {
             // Свапаем местами строки (если максимальный элемент стоит не на главной диагонали)
-            swap<<<32, 32>>>(dev_matrix, dev_identityMatrix, col, max_idx, size);
+            swap<<<216, 216>>>(dev_matrix, dev_identityMatrix, col, max_idx, size);
         }
         // Зануляем элементы ниже главного
         nullifyDown<<<dim3(32, 16), dim3(32, 16)>>>(dev_matrix, dev_identityMatrix, size, col);
