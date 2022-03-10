@@ -56,78 +56,6 @@ __device__ double count_class_number(uchar4* img, int index) {
     return temp;
 }
 
-void precalculate(std::vector<std::vector<point>> &pixels,
-                  uchar4* img,
-                  int nc,
-                  int width) {
-    std::vector<v3> avg;
-    avg.resize(32);
-    std::vector<matrix> cov;
-    cov.resize(32);
-
-    for (int i = 0; i < nc; ++i) {
-        avg[i].x = 0;
-        avg[i].y = 0;
-        avg[i].z = 0;
-
-        for (int j = 0; j < pixels[i].size(); j++) {
-            v3 temp;
-            uchar4 pixel = img[pixels[i][j].x + pixels[i][j].y * width];
-            temp.x = pixel->x;
-            temp.y = pixel->y;
-            temp.z = pixel->z;
-            avg[i].x += temp.x;
-            avg[i].y += temp.y;
-            avg[i].z += temp.z;
-        }
-
-        avg[i].x /= pixels[i].size();
-        avg[i].y /= pixels[i].size();
-        avg[i].z /= pixels[i].size();
-
-        for (int j = 0; j < pixels[i].size(); ++j) {
-            v3 temp;
-            uchar4 pixel = img[pixels[i][j].x + pixels[i][j].y * width];
-            temp.x = pixel->x;
-            temp.y = pixel->y;
-            temp.z = pixel->z;
-            v3 sub;
-            sub.x = temp.x - avg[i].x;
-            sub.y = temp.y - avg[i].y;
-            sub.z = temp.z - avg[i].z;
-
-            matrix temp;
-
-            temp.m[0][0] = sub.x * sub.x;
-            temp.m[0][1] = sub.x * sub.y;
-            temp.m[0][2] = sub.x * sub.z;
-            temp.m[1][0] = sub.y * sub.x;
-            temp.m[1][1] = sub.y * sub.y;
-            temp.m[1][2] = sub.y * sub.z;
-            temp.m[2][0] = sub.z * sub.x;
-            temp.m[2][1] = sub.z * sub.y;
-            temp.m[2][2] = sub.z * sub.z;
-
-            for (int row = 0; row < 3; row++) {
-                for (int col = 0; col < 3; col++) {
-                    cov[i].m[row][col] += temp.m[row][col];
-                }
-            }
-        }
-        if (pixels[i].size() > 1) {
-            for (auto& matr : cov[i].m) {
-                for (double& value : matr) {
-                    value /= (double)(pixels[i].size() - 1);
-                }
-            }
-        }
-
-        inverseMatrix(cov[i]);
-        temp_avgs[i] = avg[i];
-        temp_covs[i] = cov[i];
-    }
-}
-
 void inverseMatrix(matrix& matr) {
     double minor_1 =  (matr.m[1][1] * matr.m[2][2] - matr.m[2][1] * matr.m[1][2]);
     double minor_2 = -(matr.m[1][0] * matr.m[2][2] - matr.m[2][0] * matr.m[1][2]);
@@ -149,6 +77,78 @@ void inverseMatrix(matrix& matr) {
                            - matr.m[0][1] * (-minor_2)
                            + matr.m[0][2] * minor_3;
         }
+    }
+}
+
+void precalculate(std::vector<std::vector<point>> &pixels,
+                  uchar4* img,
+                  int nc,
+                  int width) {
+    std::vector<v3> avg;
+    avg.resize(32);
+    std::vector<matrix> cov;
+    cov.resize(32);
+
+    for (int i = 0; i < nc; ++i) {
+        avg[i].x = 0;
+        avg[i].y = 0;
+        avg[i].z = 0;
+
+        for (int j = 0; j < pixels[i].size(); j++) {
+            v3 temp;
+            uchar4 pixel = img[pixels[i][j].x + pixels[i][j].y * width];
+            temp.x = pixel.x;
+            temp.y = pixel.y;
+            temp.z = pixel.z;
+            avg[i].x += temp.x;
+            avg[i].y += temp.y;
+            avg[i].z += temp.z;
+        }
+
+        avg[i].x /= pixels[i].size();
+        avg[i].y /= pixels[i].size();
+        avg[i].z /= pixels[i].size();
+
+        for (int j = 0; j < pixels[i].size(); ++j) {
+            v3 temp;
+            uchar4 pixel = img[pixels[i][j].x + pixels[i][j].y * width];
+            temp.x = pixel.x;
+            temp.y = pixel.y;
+            temp.z = pixel.z;
+            v3 sub;
+            sub.x = temp.x - avg[i].x;
+            sub.y = temp.y - avg[i].y;
+            sub.z = temp.z - avg[i].z;
+
+            matrix tmp;
+
+            tmp.m[0][0] = sub.x * sub.x;
+            tmp.m[0][1] = sub.x * sub.y;
+            tmp.m[0][2] = sub.x * sub.z;
+            tmp.m[1][0] = sub.y * sub.x;
+            tmp.m[1][1] = sub.y * sub.y;
+            tmp.m[1][2] = sub.y * sub.z;
+            tmp.m[2][0] = sub.z * sub.x;
+            tmp.m[2][1] = sub.z * sub.y;
+            tmp.m[2][2] = sub.z * sub.z;
+
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 3; col++) {
+                    cov[i].m[row][col] += tmp.m[row][col];
+                }
+            }
+        }
+        if (pixels[i].size() > 1) {
+            for (auto& matr : cov[i].m) {
+                for (double& value : matr) {
+                    value /= (double)(pixels[i].size() - 1);
+                }
+            }
+        }
+
+        inverseMatrix(cov[i]);
+        temp_avgs[i] = avg[i];
+        temp_covs[i] = cov[i];
     }
 }
 
@@ -180,11 +180,11 @@ __global__ void mahalanobis_distance(uchar4* img, int width, int height, int nc)
 
 
 int main() {
-    string nameIn;
-    string nameOut;
+    std::string nameIn;
+    std::string nameOut;
     int nc;
     int pixel_count;
-    int width
+    int width;
     int height;
     std::cin >> nameIn;
     std::cin >> nameOut;
@@ -201,8 +201,8 @@ int main() {
 
     FILE* in_file = fopen(nameIn.c_str(), "rb");
     FILE* out_file = fopen(nameOut.c_str(), "wb");
-    fread(&w, sizeof(int), 1, in_file);
-    fread(&h, sizeof(int), 1, in_file);
+    fread(&width, sizeof(int), 1, in_file);
+    fread(&height, sizeof(int), 1, in_file);
 
     uchar4* img = (uchar4*)malloc(sizeof(uchar4) * width * height);
     fread(img, sizeof(uchar4), width * height, in_file);
@@ -214,7 +214,7 @@ int main() {
     uchar4* out_img;
     CSC(cudaMalloc(&out_img, sizeof(uchar4) * width * height));
     CSC(cudaMemcpy(out_img, img, sizeof(uchar4) * width * height, cudaMemcpyHostToDevice));
-    mahalanobis_kernel<<<dim3(32, 32), dim3(32, 32)>>>(out_img, width, height, nc);
+    mahalanobis_distance<<<dim3(32, 32), dim3(32, 32)>>>(out_img, width, height, nc);
     CSC(cudaGetLastError());
     CSC(cudaMemcpy(img, out_img, sizeof(uchar4) * width * height, cudaMemcpyDeviceToHost));
 
