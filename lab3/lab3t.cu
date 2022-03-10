@@ -12,11 +12,6 @@ do {																\
 	}																\
 } while(0)
 
-__constant__ v3 gpu_avgs[32];
-__constant__ matrix gpu_covs[32];
-v3 temp_avgs[32];
-matrix temp_covs[32];
-
 struct matrix {
     double m[3][3];
 };
@@ -28,6 +23,11 @@ struct v3 {
 struct point {
     int x, y;
 };
+
+__constant__ v3 gpu_avgs[32];
+__constant__ matrix gpu_covs[32];
+v3 temp_avgs[32];
+matrix temp_covs[32];
 
 __device__ double count_class_number(uchar4* img, int index) {
 
