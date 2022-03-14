@@ -65,8 +65,8 @@ __global__ void mahalanobis_kernel(uchar4* image, int nc, int width, int height)
     for (int j = idy; j < height; j += offset_y) {
         for (int i = idx; i < width; i += offset_x) {
             int temp = 0;
-            double max_jc = count_class_number(&p, 0);
             uchar4 p = image[i + j * width];
+            double max_jc = count_class_number(&p, 0);
 
             for (int k = 1; k < nc; k++) {
 
@@ -160,7 +160,6 @@ int main() {
     std::string input_filename;
     std::string output_filename;
     int nc, class_count, width, height;
-    uchar4* px = (uchar4*)malloc(sizeof(uchar4) * width * height);
     uchar4* out_pixels;
 
     std::cin >> input_filename;
@@ -182,6 +181,7 @@ int main() {
     FILE* output = fopen(output_filename.c_str(), "wb");
     fread(&width, sizeof(int), 1, input);
     fread(&height, sizeof(int), 1, input);
+    uchar4* px = (uchar4*)malloc(sizeof(uchar4) * width * height);
     fread(px, sizeof(uchar4), width * height, input);
     fclose(input);
 
