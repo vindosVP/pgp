@@ -2,296 +2,204 @@
 #include <vector>
 #include <string>
 
-using namespace std;
+#define CSC(call)  													\
+do {																\
+	cudaError_t res = call;											\
+	if (res != cudaSuccess) {										\
+		fprintf(stderr, "ERROR in %s:%d. Message: %s\n",			\
+				__FILE__, __LINE__, cudaGetErrorString(res));		\
+		exit(0);													\
+	}																\
+} while(0)
 
-#define CUDA_ERROR(err) { \
-    if (err != cudaSuccess) { \
-        fprintf(stderr, "ERROR: CUDA failed in %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
-		return(1); \
-    } \
-} \
-
-typedef struct {
-    int x;
-    int y;
-} point;
-
-typedef struct {
-    double x;
-    double y;
-    double z;
-} vec3;
-
-typedef struct {
-    double data[3][3];
-} matr;
+struct matrix {
+    double values[3][3];
+};
 
 
-__constant__ vec3 gpu_avgs[32];
-__constant__ matr gpu_covs[32];
+struct v3 {
+    double x, y, z;
+};
 
-vec3 copy_a[32];
-matr copy_c[32];
+struct p {
+    int x, y;
+};
 
-void inverseMatr(matr &cov_i) {
-    double M1 =  (cov_i.data[1][1] * cov_i.data[2][2] - cov_i.data[2][1] * cov_i.data[1][2]);
-    double M2 = -(cov_i.data[1][0] * cov_i.data[2][2] - cov_i.data[2][0] * cov_i.data[1][2]);
-    double M3 =  (cov_i.data[1][0] * cov_i.data[2][1] - cov_i.data[2][0] * cov_i.data[1][1]);
 
-    double M4 = -(cov_i.data[0][1] * cov_i.data[2][2] - cov_i.data[2][1] * cov_i.data[0][2]);
-    double M5 =  (cov_i.data[0][0] * cov_i.data[2][2] - cov_i.data[2][0] * cov_i.data[0][2]);
-    double M6 = -(cov_i.data[0][0] * cov_i.data[2][1] - cov_i.data[2][0] * cov_i.data[0][1]);
+v3 glob_avgs[32];
+matrix glob_covs[32];
 
-    double M7 =  (cov_i.data[0][1] * cov_i.data[1][2] - cov_i.data[1][1] * cov_i.data[0][2]);
-    double M8 = -(cov_i.data[0][0] * cov_i.data[1][2] - cov_i.data[1][0] * cov_i.data[0][2]);
-    double M9 =  (cov_i.data[0][0] * cov_i.data[1][1] - cov_i.data[1][0] * cov_i.data[0][1]);
+__constant__ v3 gpu_avgs[32];
+__constant__ matrix gpu_covs[32];
 
-    double minor[3][3] = {{M1, M4, M7},
-                          {M2, M5, M8},
-                          {M3, M6, M9}};
 
-    double D = cov_i.data[0][0] * M1 - cov_i.data[0][1] * (-M2) + cov_i.data[0][2] * M3;
+__device__ double count_class_number(uchar4* pixel, int idx) {
+    double sub[3];
+    double matrixAns[3];
+    double class_num = 0.0;
+
+    for (int i = 0; i < 3; i++) {
+        matrixAns[i] = 0;
+    }
+
+    sub[0] = pixel->x - gpu_avgs[idx].x;
+    sub[1] = pixel->y - gpu_avgs[idx].y;
+    sub[2] = pixel->z - gpu_avgs[idx].z;
+
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 3; ++j) {
-            minor[i][j] /= D;
-            cov_i.data[i][j] = minor[i][j];
+            matrixAns[i] += gpu_covs[idx].values[j][i] * sub[j];
         }
+        class_num -= sub[i] * matrixAns[i];
     }
 
+    return class_num;
 }
 
-__device__ __host__ void getColors(vec3 &colors, uchar4* pixel) {
-    colors.x = pixel->x;
-    colors.y = pixel->y;
-    colors.z = pixel->z;
-}
+__global__ void mahalanobis_kernel(uchar4* image, int nc, int width, int height) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int idy = blockIdx.y * blockDim.y + threadIdx.y;
+    int offset_x = gridDim.x * blockDim.x;
+    int offset_y = gridDim.y * blockDim.y;
 
-double cpuFindPixel(uchar4* pixel, int idx) {
-    vec3 colors;
-    getColors(colors, pixel);
+    for (int j = idy; j < height; j += offset_y) {
+        for (int i = idx; i < width; i += offset_x) {
+            int temp = 0;
+            double max_jc = count_class_number(&p, 0);
+            uchar4 p = image[i + j * width];
 
-    double diff[3];
-    diff[0] = colors.x - copy_a[idx].x;
-    diff[1] = colors.y - copy_a[idx].y;
-    diff[2] = colors.z - copy_a[idx].z;
+            for (int k = 1; k < nc; k++) {
 
-    double matrAns[3];
-    matrAns[0] = 0;
-    matrAns[1] = 0;
-    matrAns[2] = 0;
+                double next_jc = count_class_number(&p, k);
 
-    // 1x3 * 3x3
-    for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            matrAns[i] += copy_c[idx].data[j][i] * diff[j];
-        }
-    }
-
-    double ans = 0.0;
-    for (int i = 0; i < 3; ++i) {
-        ans += diff[i] * matrAns[i];
-    }
-
-    return -ans;
-}
-
-__device__ double findPixel(uchar4* pixel, int idx) {
-    vec3 colors;
-    getColors(colors, pixel);
-
-    double diff[3];
-    diff[0] = colors.x - gpu_avgs[idx].x;
-    diff[1] = colors.y - gpu_avgs[idx].y;
-    diff[2] = colors.z - gpu_avgs[idx].z;
-
-    double matrAns[3];
-    matrAns[0] = 0;
-    matrAns[1] = 0;
-    matrAns[2] = 0;
-
-    // 1x3 * 3x3
-    for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            matrAns[i] += gpu_covs[idx].data[j][i] * diff[j];
-        }
-    }
-
-    double ans = 0.0;
-    for (int i = 0; i < 3; ++i) {
-        ans += diff[i] * matrAns[i];
-    }
-    return -ans;
-}
-
-void CPUmahalanobis_kernel(uchar4* pixels, int w, int h, int nc) {
-    for (int row = 0; row < h; row++) {
-        for (int col = 0; col < w; col++) {
-            uchar4 pixel = pixels[row * w + col];
-            double mx = cpuFindPixel(&pixel, 0);
-            int mIdx = 0;
-            for (int i = 1; i < nc; ++i) {
-                double tmp = cpuFindPixel(&pixel, i);
-                if (mx < tmp) {
-                    mx = tmp;
-                    mIdx = i;
+                if (next_jc > max_jc) {
+                    temp = k;
+                    max_jc = next_jc;
                 }
             }
-            pixels[row * w + col].w = (unsigned char)mIdx;
+
+            image[i + j * width].w = (unsigned char)temp;
         }
     }
 }
 
-__global__ void mahalanobis_kernel(uchar4* pixels, int w, int h, int nc) {
-    int idY = blockIdx.y * blockDim.y + threadIdx.y;
-    int idX = blockIdx.x * blockDim.x + threadIdx.x;
-    int offsetY = gridDim.y * blockDim.y;
-    int offsetX = gridDim.x * blockDim.x;
+void matrixInverse(matrix &matr) {
+    double minor1 =  (matr.values[1][1] * matr.values[2][2] - matr.values[2][1] * matr.values[1][2]);
+    double minor2 = -(matr.values[1][0] * matr.values[2][2] - matr.values[2][0] * matr.values[1][2]);
+    double minor3 =  (matr.values[1][0] * matr.values[2][1] - matr.values[2][0] * matr.values[1][1]);
+    double minor4 = -(matr.values[0][1] * matr.values[2][2] - matr.values[2][1] * matr.values[0][2]);
+    double minor5 =  (matr.values[0][0] * matr.values[2][2] - matr.values[2][0] * matr.values[0][2]);
+    double minor6 = -(matr.values[0][0] * matr.values[2][1] - matr.values[2][0] * matr.values[0][1]);
+    double minor7 =  (matr.values[0][1] * matr.values[1][2] - matr.values[1][1] * matr.values[0][2]);
+    double minor8 = -(matr.values[0][0] * matr.values[1][2] - matr.values[1][0] * matr.values[0][2]);
+    double minor9 = (matr.values[0][0] * matr.values[1][1] - matr.values[1][0] * matr.values[0][1]);
 
-    for (int row = idY; row < h; row += offsetY) {
-        for (int col = idX; col < w; col += offsetX) {
-            uchar4 pixel = pixels[row * w + col];
-            double mx = findPixel(&pixel, 0);
-            int mIdx = 0;
-            for (int i = 1; i < nc; ++i) {
-                double tmp = findPixel(&pixel, i);
-                if (mx < tmp) {
-                    mx = tmp;
-                    mIdx = i;
-                }
-            }
-            pixels[row * w + col].w = (unsigned char)mIdx;
-        }
-    }
+    double D = matr.values[0][0] * minor1 - matr.values[0][1] * (-minor2) + matr.values[0][2] * minor3;
+
+    matr.values[0][0] = minor1 / D;
+    matr.values[0][1] = minor4 / D;
+    matr.values[0][2] = minor7 / D;
+    matr.values[1][0] = minor2 / D;
+    matr.values[1][1] = minor5 / D;
+    matr.values[1][2] = minor8 / D;
+    matr.values[2][0] = minor3 / D;
+    matr.values[2][1] = minor6 / D;
+    matr.values[2][2] = minor9 / D;
 }
 
-void calculate(vector<vector<point>> &v, uchar4* pixels, int nc, int w) {
-    vector<vec3> avgs(32);
-    vector<matr> covs(32);
+void pre_calculate(std::vector<std::vector<p>> &image, uchar4* pixels, int nc, int width) {
+    std::vector<v3> a;
+    std::vector<matrix> c;
+    a.resize(32);
+    c.resize(32);
 
-    for (int i = 0; i < nc; ++i) {
-        vec3 colors;
-        avgs[i].x = 0;
-        avgs[i].y = 0;
-        avgs[i].z = 0;
-
-        for (int j = 0; j < v[i].size(); ++j) {
-            point point_ = v[i][j];
-            uchar4 pixel = pixels[point_.y * w + point_.x];
-
-            getColors(colors, &pixel);
-
-            avgs[i].x += colors.x;
-            avgs[i].y += colors.y;
-            avgs[i].z += colors.z;
+    for (int i = 0; i < nc; i++) {
+        int size = image[i].size();
+        a[i].x = 0;
+        a[i].y = 0;
+        a[i].z = 0;
+        for (int j = 0; j < size; j++) {
+            p point = image[i][j];
+            uchar4 pixel = pixels[point.x + point.y * width];
+            a[i].x += pixel.x;
+            a[i].y += pixel.y;
+            a[i].z += pixel.z;
         }
-
-        double val = v[i].size();
-        avgs[i].x /= val;
-        avgs[i].y /= val;
-        avgs[i].z /= val;
-
-        for (int j = 0; j < v[i].size(); ++j) {
-            point point_ = v[i][j];
-            uchar4 pixel = pixels[point_.y * w + point_.x];
-
-            getColors(colors, &pixel);
-
-            vec3 diff;
-            diff.x = colors.x - avgs[i].x;
-            diff.y = colors.y - avgs[i].y;
-            diff.z = colors.z - avgs[i].z;
-
-            matr tmp;
-
-            // diff * diff.T
-            tmp.data[0][0] = diff.x * diff.x;
-            tmp.data[0][1] = diff.x * diff.y;
-            tmp.data[0][2] = diff.x * diff.z;
-            tmp.data[1][0] = diff.y * diff.x;
-            tmp.data[1][1] = diff.y * diff.y;
-            tmp.data[1][2] = diff.y * diff.z;
-            tmp.data[2][0] = diff.z * diff.x;
-            tmp.data[2][1] = diff.z * diff.y;
-            tmp.data[2][2] = diff.z * diff.z;
-
-            for (int k = 0; k < 3; ++k) {
-                for (int l = 0; l < 3; ++l) {
-                    covs[i].data[k][l] += tmp.data[k][l];
+        a[i].x /= size;
+        a[i].y /= size;
+        a[i].z /= size;
+        for (int j = 0; j < size; j++) {
+            p point = image[i][j];
+            uchar4 pixel = pixels[point.y * width + point.x];
+            c[i].values[0][0] += (pixel.x - a[i].x) * (pixel.x - a[i].x);
+            c[i].values[0][1] += (pixel.x - a[i].x) * (pixel.y - a[i].y);
+            c[i].values[0][2] += (pixel.x - a[i].x) * (pixel.z - a[i].z);
+            c[i].values[1][0] += (pixel.y - a[i].y) * (pixel.x - a[i].x);
+            c[i].values[1][1] += (pixel.y - a[i].y) * (pixel.y - a[i].y);
+            c[i].values[1][2] += (pixel.y - a[i].y) * (pixel.z - a[i].z);
+            c[i].values[2][0] += (pixel.z - a[i].z) * (pixel.x - a[i].x);
+            c[i].values[2][1] += (pixel.z - a[i].z) * (pixel.y - a[i].y);
+            c[i].values[2][2] += (pixel.z - a[i].z) * (pixel.z - a[i].z);
+        }
+        if (size > 1) {
+            size = (double)(size - 1);
+            for (auto& row : c[i].values) {
+                for (auto& item : row) {
+                    item /= size;
                 }
             }
         }
-
-        if (v[i].size() > 1) {
-            val = (double)(v[i].size() - 1);
-            for (auto & k : covs[i].data) {
-                for (double & l : k) {
-                    l /= val;
-                }
-            }
-        }
-    }
-
-    for (int i = 0; i < nc; ++i) {
-        inverseMatr(covs[i]);
-        copy_a[i] = avgs[i];
-        copy_c[i] = covs[i];
+        
+        matrixInverse(c[i]);
+        glob_avgs[i] = a[i];
+        glob_covs[i] = c[i];
     }
 }
 
 int main() {
-    string nameIn;
-    string nameOut;
-    int nc, cs, w, h;
+    std::string input_filename;
+    std::string output_filename;
+    int nc, class_count, width, height;
+    uchar4* px = (uchar4*)malloc(sizeof(uchar4) * width * height);
+    uchar4* out_pixels;
 
-    cin >> nameIn;
-    cin >> nameOut;
-    cin >> nc;
+    std::cin >> input_filename;
+    std::cin >> output_filename;
+    std::cin >> nc;
 
-    // Input data
-    vector<vector<point>> v(nc);
-    for (int i = 0; i < nc; ++i) {
-        cin >> cs;
-        v[i].resize(cs);
-        for (int j = 0; j < cs; ++j) {
-            cin >> v[i][j].x >> v[i][j].y;
+    std::vector<std::vector<p>> image;
+    image.resize(nc);
+
+    for (int i = 0; i < nc; i++) {
+        std::cin >> class_count;
+        image[i].resize(class_count);
+        for (int j = 0; j < class_count; j++) {
+            std::cin >> image[i][j].x >> image[i][j].y;
         }
     }
 
-    // File open
-    FILE* in  = fopen(nameIn.c_str(), "rb");
-    FILE* out = fopen(nameOut.c_str(), "wb");
+    FILE* input = fopen(input_filename.c_str(), "rb");
+    FILE* output = fopen(output_filename.c_str(), "wb");
+    fread(&width, sizeof(int), 1, input);
+    fread(&height, sizeof(int), 1, input);
+    fread(px, sizeof(uchar4), width * height, input);
+    fclose(input);
 
-    fread(&w, sizeof(int), 1, in);
-    fread(&h, sizeof(int), 1, in);
+    pre_calculate(image, px, nc, width);
+    CSC(cudaMemcpyToSymbol(gpu_avgs, glob_avgs, 32 * sizeof(v3)));
+    CSC(cudaMemcpyToSymbol(gpu_covs, glob_covs, 32 * sizeof(matrix)));
+    CSC(cudaMalloc(&out_pixels, sizeof(uchar4) * width * height));
+    CSC(cudaMemcpy(out_pixels, px, sizeof(uchar4) * width * height, cudaMemcpyHostToDevice));
+    mahalanobis_kernel<<<dim3(32, 32), dim3(32, 32)>>>(out_pixels, nc, width, height);
+    CSC(cudaGetLastError());
+    CSC(cudaMemcpy(px, out_pixels, sizeof(uchar4) * width * height, cudaMemcpyDeviceToHost));
+    CSC(cudaFree(out_pixels));
 
-    uchar4* pixels = (uchar4*)malloc(sizeof(uchar4) * w * h);
+    fwrite(&width, sizeof(int), 1, output);
+    fwrite(&height, sizeof(int), 1, output);
+    fwrite(px, sizeof(uchar4), width * height, output);
+    fclose(output);
 
-    fread(pixels, sizeof(uchar4), w * h, in);
-    fclose(in);
-
-    // Pre calculating
-    calculate(v, pixels, nc, w);
-    CUDA_ERROR(cudaMemcpyToSymbol(gpu_avgs, copy_a, 32 * sizeof(vec3)));
-    CUDA_ERROR(cudaMemcpyToSymbol(gpu_covs, copy_c, 32 * sizeof(matr)));
-
-    uchar4* out_pixels;
-    CUDA_ERROR(cudaMalloc(&out_pixels, sizeof(uchar4) * w * h));
-    CUDA_ERROR(cudaMemcpy(out_pixels, pixels, sizeof(uchar4) * w * h, cudaMemcpyHostToDevice));
-
-//    CPUmahalanobis_kernel(pixels, w, h, nc);
-
-    mahalanobis_kernel<<<dim3(32, 32), dim3(32, 32)>>>(out_pixels, w, h, nc);
-    CUDA_ERROR(cudaGetLastError());
-    CUDA_ERROR(cudaMemcpy(pixels, out_pixels, sizeof(uchar4) * w * h, cudaMemcpyDeviceToHost));
-
-    CUDA_ERROR(cudaFree(out_pixels));
-
-    fwrite(&w, sizeof(int), 1, out);
-    fwrite(&h, sizeof(int), 1, out);
-    fwrite(pixels, sizeof(uchar4), w * h, out);
-    fclose(out);
-
-    free(pixels);
-
+    free(px);
     return 0;
 }
