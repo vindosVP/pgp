@@ -14,12 +14,6 @@ do { \
 
 using namespace std;
 
-__constant__ vec_st vec[32];
-__constant__ matrix dots[32];
-
-vec_st void_vec[32];
-matrix void_matr[32];
-
 struct matrix{
     double dots[3][3];
 };
@@ -31,6 +25,12 @@ struct position{
 struct vec_st{
     double x, y, z;
 };
+
+__constant__ vec_st vec[32];
+__constant__ matrix dots[32];
+
+vec_st void_vec[32];
+matrix void_matr[32];
 
 void matrix_reversation(matrix &matrix_vals) {
     double minor_part11, minor_part12, minor_part21, minor_part22, minor_part31, minor_part32;
