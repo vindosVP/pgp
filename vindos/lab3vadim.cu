@@ -55,7 +55,7 @@ void matrix_reversation(matrix &matrix_vals) {
     double minor_part71, minor_part72, minor_part81, minor_part82, minor_part91, minor_part92;
 
     double minor7 = minor_part71 - minor_part72;
-    double minor8 = minor_part82 - minor_part81,;
+    double minor8 = minor_part82 - minor_part81;
     double minor9 = minor_part91 - minor_part92;
 
     double minor[3][3] = {{minor1, minor4, minor7},{minor2, minor5, minor8},{minor3, minor6, minor9}};
@@ -70,7 +70,7 @@ void matrix_reversation(matrix &matrix_vals) {
 __device__ double get_current_pos(uchar4* dot, int f) {
     double arr_points[3], arr_result[3];
 
-    for (i = 0, i < 3, i++){
+    for (int i = 0; i < 3; i++){
         arr_result[i] = 0;
     }
 
@@ -106,8 +106,8 @@ __global__ void kernel(uchar4* photo_dots, int width, int height, int nc) {
     for (int row = id_Y; row < height; row += offset_Y) {
         for (int col = id_X; col < width; col += offset_X) {
             int timed = 0;
+	    uchar4 dot = photo_dots[row * width + col];
             double max = get_current_pos(&dot, 0);
-            uchar4 dot = photo_dots[row * width + col];
             for (int i = 1; i < nc; i++) {
                 double next = get_current_pos(&dot, i);
                 if (next > max) {
@@ -137,7 +137,7 @@ void start(uchar4* photo_dots, vector<vector<position>> &input_photo, int nc, in
             uchar4 dots = photo_dots[width * point.y + point.x];
 
             vec_values[i].x = vec_values[i].x + dots.x;
-            vec_values[i].y = vec_values[i].Y + dots.y;
+            vec_values[i].y = vec_values[i].y + dots.y;
             vec_values[i].z = vec_values[i].z + dots.z;
         }
 
