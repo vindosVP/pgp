@@ -2,108 +2,107 @@
 #include <vector>
 #include <string>
 
+#define CSC(call) \
+do { \
+	cudaError_t res = call;  \
+	if (res != cudaSuccess){ \
+		fprintf(stderr, "ERROR in %s:%d. Message: %s\n", \
+			__FILE__, __LINE__, cudaGetErrorString(res));  \
+		exit(0);  \
+	} \
+} while(0)
+
 using namespace std;
-
-struct position{
-    int x;
-    int y;
-} ;
-
-struct vector{
-    double x;
-    double y;
-    double z;
-} ;
 
 struct matrix{
     double dots[3][3];
-} ;
+};
 
+struct position{
+    int x,y;
+};
 
-__constant__ vector vec[32];
+struct vec_st{
+    double x, y, z;
+};
+
+__constant__ vec_st vec[32];
 __constant__ matrix dots[32];
 
-vector void_vec[32];
+vec_st void_vec[32];
 matrix void_matr[32];
 
-void inverseMatr(matrix &matrix_vals) {
-    double M1 =  (matrix_vals.dots[1][1] * matrix_vals.dots[2][2] - matrix_vals.dots[2][1] * matrix_vals.dots[1][2]);
-    double M2 = -(matrix_vals.dots[1][0] * matrix_vals.dots[2][2] - matrix_vals.dots[2][0] * matrix_vals.dots[1][2]);
-    double M3 =  (matrix_vals.dots[1][0] * matrix_vals.dots[2][1] - matrix_vals.dots[2][0] * matrix_vals.dots[1][1]);
 
-    double M4 = -(matrix_vals.dots[0][1] * matrix_vals.dots[2][2] - matrix_vals.dots[2][1] * matrix_vals.dots[0][2]);
-    double M5 =  (matrix_vals.dots[0][0] * matrix_vals.dots[2][2] - matrix_vals.dots[2][0] * matrix_vals.dots[0][2]);
-    double M6 = -(matrix_vals.dots[0][0] * matrix_vals.dots[2][1] - matrix_vals.dots[2][0] * matrix_vals.dots[0][1]);
+void reversation(matrix &matrix_vals) {
+    double minor_part11, minor_part12, minor_part21, minor_part22, minor_part31, minor_part32;
 
-    double M7 =  (matrix_vals.dots[0][1] * matrix_vals.dots[1][2] - matrix_vals.dots[1][1] * matrix_vals.dots[0][2]);
-    double M8 = -(matrix_vals.dots[0][0] * matrix_vals.dots[1][2] - matrix_vals.dots[1][0] * matrix_vals.dots[0][2]);
-    double M9 =  (matrix_vals.dots[0][0] * matrix_vals.dots[1][1] - matrix_vals.dots[1][0] * matrix_vals.dots[0][1]);
+    minor_part11 = matrix_vals.dots[2][2] * matrix_vals.dots[1][1];
+    minor_part12 = matrix_vals.dots[1][2] * matrix_vals.dots[2][1];
+    minor_part21 = matrix_vals.dots[2][2] * matrix_vals.dots[1][0];
+    minor_part22 = matrix_vals.dots[1][2] * matrix_vals.dots[2][0];
+    minor_part31 = matrix_vals.dots[2][1] * matrix_vals.dots[1][0];
+    minor_part32 = matrix_vals.dots[1][1] * matrix_vals.dots[2][0];
 
-    double minor[3][3] = {{M1, M4, M7},{M2, M5, M8},{M3, M6, M9}};
+    double minor1 = minor_part11 - minor_part12;
+    double minor2 = -(minor_part21 - minor_part22);
+    double minor3 = minor_part31 - minor_part32;
 
-    double D = matrix_vals.dots[0][0] * M1 - matrix_vals.dots[0][1] * (-M2) + matrix_vals.dots[0][2] * M3;
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-            matrix_vals.dots[i][j] = minor[i][j] / D;
-        }
-    }
+    double minor_part41, minor_part42, minor_part51, minor_part52, minor_part61, minor_part62;
+
+    minor_part41 = matrix_vals.dots[0][1] * matrix_vals.dots[2][2];
+    minor_part42 = matrix_vals.dots[2][1] * matrix_vals.dots[0][2];
+    minor_part51 = matrix_vals.dots[0][0] * matrix_vals.dots[2][2];
+    minor_part52 = matrix_vals.dots[2][0] * matrix_vals.dots[0][2];
+    minor_part61 = matrix_vals.dots[0][0] * matrix_vals.dots[2][1];
+    minor_part62 = matrix_vals.dots[2][0] * matrix_vals.dots[0][1];
+
+    double minor4 = -(minor_part41 - minor_part42);
+    double minor5 = minor_part51 - minor_part52;
+    double minor6 = -(minor_part61 - minor_part62);
+
+    double minor_part71, minor_part72, minor_part81, minor_part82, minor_part91, minor_part92;
+
+    minor_part71 = matrix_vals.dots[0][1] * matrix_vals.dots[1][2];
+    minor_part72 = matrix_vals.dots[1][1] * matrix_vals.dots[0][2];
+    minor_part81 = matrix_vals.dots[0][0] * matrix_vals.dots[1][2];
+    minor_part82 = matrix_vals.dots[1][0] * matrix_vals.dots[0][2];
+    minor_part91 = matrix_vals.dots[0][0] * matrix_vals.dots[1][1];
+    minor_part92 = matrix_vals.dots[1][0] * matrix_vals.dots[0][1];
+
+    double minor7 = minor_part71 - minor_part72;
+    double minor8 = -(minor_part81 - minor_part82);
+    double minor9 = minor_part91 - minor_part92;
+
+    //double minor[3][3] = {{minor1, minor4, minor7},{minor2, minor5, minor8},{minor3, minor6, minor9}};
+
+    // for (int i = 0; i < 3; i++) {
+    //     for (int j = 0; j < 3; j++) {
+    //         matrix_vals.dots[i][j] = minor[i][j] / (matrix_vals.dots[0][0] * minor1 - matrix_vals.dots[0][1] * (-minor2) + matrix_vals.dots[0][2] * minor3);
+    //     }
+    // }
+
+    double D = matrix_vals.dots[0][0] * minor1 - matrix_vals.dots[0][1] * (-minor2) + matrix_vals.dots[0][2] * minor3;
+
+    matrix_vals.dots[0][0] = minor1 / D;
+    matrix_vals.dots[0][1] = minor4 / D;
+    matrix_vals.dots[0][2] = minor7 / D;
+    matrix_vals.dots[1][0] = minor2 / D;
+    matrix_vals.dots[1][1] = minor5 / D;
+    matrix_vals.dots[1][2] = minor8 / D;
+    matrix_vals.dots[2][0] = minor3 / D;
+    matrix_vals.dots[2][1] = minor6 / D;
+    matrix_vals.dots[2][2] = minor9 / D;
 }
 
-__device__ double findPixel(uchar4* dot, int id_X) {
-    double div[3]
-    double ans = 0.0;
-    double Ans[3];
-    Ans[0] = 0;
-    Ans[1] = 0;
-    Ans[2] = 0;
-
-    div[0] = dot->x - void_vec[id_X].x;
-    div[1] = dot->y - void_vec[id_X].y;
-    div[2] = dot->z - void_vec[id_X].z;
-
-
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-            Ans[i] += void_matr[id_X].dots[j][i] * div[j];
-        }
-    }
-
-    for (int i = 0; i < 3; i++) {
-        ans += div[i] * Ans[i];
-    }
-    return -ans;
-}
-
-
-__global__ void mahalanobis_kernel(uchar4* photo_dots, int width, int height, int nc) {
-    int id_X = blockIdx.x * blockDim.x + threadIdx.x;
-    int id_Y = blockIdx.y * blockDim.y + threadIdx.y;
-    int offset_X = gridDim.x * blockDim.x;
-    int offset_Y = gridDim.y * blockDim.y;
-
-    for (int row = id_Y; row < height; row += offset_Y) {
-        for (int col = id_X; col < width; col += offset_X) {
-            uchar4 dot = photo_dots[row * width + col];
-            double max = findPixel(&dot, 0);
-            int timed = 0;
-            for (int i = 1; i < nc; i++) {
-                double next = findPixel(&dot, i);
-                if (next > max) {
-                    max = next;
-                    timed = i;
-                }
-            }
-            photo_dots[row * width + col].width = (unsigned char)timed;
-        }
-    }
-}
 
 void start(uchar4* photo_dots, vector<vector<position>> &input_photo, int nc, int width) {
-    vector<vector> vec_values.resize(32);
-    vector<matrix> matrix_values.resize(32);
+    vector<vec_st> vec_values;
+    vec_values.resize(32);
+    vector<matrix> matrix_values;
+    matrix_values.resize(32);
 
     for (int i = 0; i < nc; i++) {
-
+    double diff = input_photo[i].size();
         vec_values[i].x = 0;
         vec_values[i].y = 0;
         vec_values[i].z = 0;
@@ -112,9 +111,9 @@ void start(uchar4* photo_dots, vector<vector<position>> &input_photo, int nc, in
             position point = input_photo[i][j];
             uchar4 dots = photo_dots[width * point.y + point.x];
 
-            vec_values[i].x += dots.x;
-            vec_values[i].y += dots.y;
-            vec_values[i].z += dots.z;
+            vec_values[i].x = vec_values[i].x + dots.x;
+            vec_values[i].y = vec_values[i].y + dots.y;
+            vec_values[i].z = vec_values[i].z + dots.z;
         }
 
         vec_values[i].x = vec_values[i].x / input_photo[i].size();
@@ -123,7 +122,7 @@ void start(uchar4* photo_dots, vector<vector<position>> &input_photo, int nc, in
 
         for (int f = 0; f < input_photo[i].size(); f++) {
             position point = input_photo[i][f];
-            uchar4 dots = photo_dots[width * point.y * w + point.x];
+            uchar4 dots = photo_dots[width * point.y + point.x];
 
             matrix timed;
             timed.dots[0][0] = (dots.x - vec_values[i].x) * (dots.x - vec_values[i].x);
@@ -136,47 +135,98 @@ void start(uchar4* photo_dots, vector<vector<position>> &input_photo, int nc, in
             timed.dots[2][1] = (dots.z - vec_values[i].z) * (dots.y - vec_values[i].y);
             timed.dots[2][2] = (dots.z - vec_values[i].z) * (dots.z - vec_values[i].z);
 
-            for (int k = 0; k < 3; k++) {
-                for (int l = 0; l < 3; l++) {
-                    matrix_values[i].dots[k][l] += timed.dots[k][l];
+            for (int row = 0; row < 3; row++) {
+                for (int column = 0; column < 3; column++) {
+                    matrix_values[i].dots[row][column] += timed.dots[row][column];
                 }
             }
         }
 
-        if (input_photo[i].size() > 1) {
-            diff = (double)(input_photo[i].size() - 1);
+
+        if (diff > 1) {
+            diff = (double)(diff - 1);
             for (auto & k : matrix_values[i].dots) {
                 for (double & l : k) {
                     l /= diff;
                 }
             }
         }
-    }
 
-    for (int i = 0; i < nc; ++i) {
-        inverseMatr(matrix_values[i]);
+        reversation(matrix_values[i]);
         void_vec[i] = vec_values[i];
         void_matr[i] = matrix_values[i];
     }
 }
 
+__device__ double get_current_pos(uchar4* dot, int f) {
+    double arr_points[3]; 
+    double arr_result[3];
+    double tmp = 0.0;
+
+    arr_points[0] = dot->x - vec[f].x;
+    arr_points[1] = dot->y - vec[f].y;
+    arr_points[2] = dot->z - vec[f].z;
+
+    for (int i = 0; i < 3; i++){
+        arr_result[i] = 0;
+    }
+
+    for (int row = 0; row < 3; row++) {
+        for (int column = 0; column < 3; column++) {
+            arr_result[row] += (arr_points[column] * dots[f].dots[column][row]);
+        }
+    }
+
+    for (int i = 0; i < 3; i++) {
+        tmp += arr_points[i] * arr_result[i];
+    }
+    return -tmp;
+}
+
+
+__global__ void kernel(uchar4* photo_dots, int width, int height, int nc) {
+    int id_X = blockIdx.x * blockDim.x + threadIdx.x;
+    int id_Y = blockIdx.y * blockDim.y + threadIdx.y;
+    int offset_X = gridDim.x * blockDim.x;
+    int offset_Y = gridDim.y * blockDim.y;
+
+    for (int row = id_Y; row < height; row += offset_Y) {
+        for (int col = id_X; col < width; col += offset_X) {
+            int timed = 0;
+            uchar4 dot = photo_dots[row * width + col];
+            double max = get_current_pos(&dot, 0);
+            for (int i = 1; i < nc; i++) {
+                double next = get_current_pos(&dot, i);
+                if (next > max) {
+                    max = next;
+                    timed = i;
+                }
+            }
+            photo_dots[row * width + col].w = (unsigned char)timed;
+        }
+    }
+}
+
+
+
 int main() {
-    string output_file_name, input_file_name;
+    string output_file_name; 
+    string input_file_name;
     int nc, width, height;
 
     cin >> input_file_name;
     cin >> output_file_name;
     cin >> nc;
 
-
-    vector<vector<position>> input_photo.resize(nc);
+    vector<vector<position>> input_photo;
+    input_photo.resize(32);
 
     int class_pixels_number;
-    for (int row = 0; row < nc; row++) {
-        cin >> class_pixels;
-        input_photo[row].resize(class_pixels_number);
-        for (int column = 0; column < class_pixels_number; column++) {
-            cin >> input_photo[row][column].x >> input_photo[row][column].y;
+    for (int i = 0; i < nc; i++) {
+        cin >> class_pixels_number;
+        input_photo[i].resize(class_pixels_number);
+        for (int j = 0; j < class_pixels_number; j++) {
+            cin >> input_photo[i][j].x >> input_photo[i][j].y;
         }
     }
 
@@ -184,7 +234,7 @@ int main() {
     FILE* output_file = fopen(output_file_name.c_str(), "wb");
 
     fread(&width, sizeof(int), 1, input_file);
-    fread(&height, sizeof(int), 1, output_file);
+    fread(&height, sizeof(int), 1, input_file);
 
     uchar4* photo_dots = (uchar4*)malloc(sizeof(uchar4) * width * height);
 
@@ -193,20 +243,18 @@ int main() {
 
 
     start(photo_dots, input_photo, nc, width);
-    cudaMemcpyToSymbol(vec, void_vec, 32 * sizeof(vector));
-    cudaMemcpyToSymbol(dots, void_matr, 32 * sizeof(matrix));
+    CSC(cudaMemcpyToSymbol(vec, void_vec, 32 * sizeof(vec_st)));
+    CSC(cudaMemcpyToSymbol(dots, void_matr, 32 * sizeof(matrix)));
 
     uchar4* output_dots;
-    cudaMalloc(&output_dots, sizeof(uchar4) * width * height);
-    cudaMemcpy(output_dots, photo_dots, sizeof(uchar4) * width * height, cudaMemcpyHostToDevice);
+    CSC(cudaMalloc(&output_dots, sizeof(uchar4) * width * height));
+    CSC(cudaMemcpy(output_dots, photo_dots, sizeof(uchar4) * width * height, cudaMemcpyHostToDevice));
 
+    kernel<<<dim3(32, 32), dim3(32, 32)>>>(output_dots, width, height, nc);
+    CSC(cudaGetLastError());
+    CSC(cudaMemcpy(photo_dots, output_dots, sizeof(uchar4) * width * height, cudaMemcpyDeviceToHost));
 
-
-    mahalanobis_kernel<<<dim3(32, 32), dim3(32, 32)>>>(output_dots, width, height, nc);
-    cudaGetLastError();
-    cudaMemcpy(photo_dots, output_dots, sizeof(uchar4) * width * height, cudaMemcpyDeviceToHost);
-
-    cudaFree(output_dots);
+    CSC(cudaFree(output_dots));
 
     fwrite(&width, sizeof(int), 1, output_file);
     fwrite(&height, sizeof(int), 1, output_file);
