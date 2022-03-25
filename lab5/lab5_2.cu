@@ -5,15 +5,6 @@
 #include <string>
                                                          
 __global__ 
-void atomic_histogram_add(int input_size, int* numbersGPU, int* histogramGPU) {
-    int idx = blockDim.x * blockIdx.x + threadIdx.x;
-	int offset = blockDim.x * gridDim.x;
-    for (int i = idx; i < input_size; i+=offset) {
-		atomicAdd(histogramGPU + numbersGPU[i], 1);
-	}
-}
-
-__global__ 
 void GPU_sorting(int input_size, int* numbersGPU, int* output_numbers, int* histogramGPU) {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 	int offset = blockDim.x * gridDim.x;
@@ -24,20 +15,32 @@ void GPU_sorting(int input_size, int* numbersGPU, int* output_numbers, int* hist
 	}
 }
 
+__global__ 
+void atomic_histogram_add(int input_size, int* numbersGPU, int* histogramGPU) {
+    int idx = blockDim.x * blockIdx.x + threadIdx.x;
+	int offset = blockDim.x * gridDim.x;
+    for (int i = idx; i < input_size; i+=offset) {
+		atomicAdd(histogramGPU + numbersGPU[i], 1);
+	}
+}
+
+
 int main() {
 	int input_size, i;
     int scan_element = -1;
     int* numbersGPU;
     int* output_numbers;
 	int* histogramGPU;
-    std::string input_file_name, output_file_name;
-    std::cin >> input_file_name;
-    std::cin >> output_file_name;
-    FILE* input_file  = fopen(input_file_name.c_str(), "rb");
-    FILE* output_file = fopen(output_file_name.c_str(), "wb");
-	fread(&input_size, sizeof(int), 1, input_file);
+    // std::string input_file_name, output_file_name;
+    // std::cin >> input_file_name;
+    // std::cin >> output_file_name;
+    // FILE* input_file  = fopen(input_file_name.c_str(), "rb");
+    // FILE* output_file = fopen(output_file_name.c_str(), "wb");
+	// fread(&input_size, sizeof(int), 1, input_file);
+	fread(&input_size, sizeof(int), 1, stdin);
 	int* input_numbers = (int*) malloc(sizeof(int) * input_size);
-    fread(input_numbers, sizeof(int), input_size, input_file);
+    //fread(input_numbers, sizeof(int), input_size, input_file);
+	fread(input_numbers, sizeof(int), input_size, stdin);
     for (i = 0; i < input_size; i++) {
         scan_element = (scan_element <= input_numbers[i]) ? input_numbers[i] : scan_element;
     }
@@ -59,6 +62,7 @@ int main() {
 	
 	cudaMemcpy(input_numbers, output_numbers, sizeof(int) * input_size, cudaMemcpyDeviceToHost);
 	
-	fwrite(input_numbers, sizeof(int), input_size, output_file);
+	//fwrite(input_numbers, sizeof(int), input_size, output_file);
+	fwrite(input_numbers, sizeof(int), input_size, stdout);
     return 0;
 }
